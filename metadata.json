@@ -1,0 +1,6 @@
+{
+  "name": "SoldOutAfrica - KOROM Festival",
+  "description": "Kenya's premier cultural and lifestyle celebration event ticketing platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
