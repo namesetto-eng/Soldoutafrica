@@ -9,7 +9,6 @@ interface HeaderProps {
   isSaved: boolean;
   onToggleSave: () => void;
   onOpenAuth: () => void;
-  onOpenAdminAuth?: () => void;
   isAdminLoggedIn: boolean;
   onOpenAdminDashboard: () => void;
 }
@@ -22,7 +21,6 @@ export const Header: React.FC<HeaderProps> = ({
   isSaved,
   onToggleSave,
   onOpenAuth,
-  onOpenAdminAuth,
   isAdminLoggedIn,
   onOpenAdminDashboard,
 }) => {
@@ -114,24 +112,27 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Admin Portal Button */}
-            <button
-              onClick={isAdminLoggedIn ? onOpenAdminDashboard : (onOpenAdminAuth || onOpenAuth)}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-700/50 text-purple-200 text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
-              title="Admin Portal"
-            >
-              <ShieldCheck className="w-4 h-4 text-purple-400" />
-              <span className="font-syne tracking-wide">Admin</span>
-            </button>
-
-            {/* TOP RIGHT CORNER: Sign In / Sign Up Access Button */}
+            {/* TOP RIGHT CORNER: Sign In / Account / Admin Access Button */}
             <button
               onClick={isAdminLoggedIn ? onOpenAdminDashboard : onOpenAuth}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-lg shadow-purple-900/50 active:scale-95 cursor-pointer shrink-0"
-              title={isAdminLoggedIn ? "Account Dashboard" : "Sign In or Sign Up"}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-lg active:scale-95 cursor-pointer shrink-0 ${
+                isAdminLoggedIn
+                  ? 'bg-purple-900 border border-purple-500 text-purple-100 hover:bg-purple-800 shadow-purple-950/60'
+                  : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/50'
+              }`}
+              title={isAdminLoggedIn ? "Admin Dashboard" : "Sign In or Sign Up"}
             >
-              <User className="w-4 h-4 text-purple-100" />
-              <span className="font-syne tracking-wide">{isAdminLoggedIn ? 'Account' : 'Sign In'}</span>
+              {isAdminLoggedIn ? (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-purple-300" />
+                  <span className="font-syne tracking-wide">Admin Dashboard</span>
+                </>
+              ) : (
+                <>
+                  <User className="w-4 h-4 text-purple-100" />
+                  <span className="font-syne tracking-wide">Sign In</span>
+                </>
+              )}
             </button>
 
             {/* Mobile Menu Toggle */}
@@ -158,25 +159,28 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </div>
             <div className="flex justify-between items-center text-xs text-slate-400 px-1 pt-1">
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-purple-400" /> Nairobi, Kenya
+              </span>
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  if (onOpenAdminAuth) onOpenAdminAuth();
-                  else onOpenAuth();
+                  if (isAdminLoggedIn) {
+                    onOpenAdminDashboard();
+                  } else {
+                    onOpenAuth();
+                  }
                 }}
-                className="text-purple-400 font-bold flex items-center gap-1"
+                className="text-white font-bold underline flex items-center gap-1.5"
               >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Admin Dashboard
-              </button>
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenAuth();
-                }}
-                className="text-white font-bold underline"
-              >
-                Sign In / Sign Up
+                {isAdminLoggedIn ? (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Admin Dashboard</span>
+                  </>
+                ) : (
+                  <span>Sign In / Sign Up</span>
+                )}
               </button>
             </div>
           </div>

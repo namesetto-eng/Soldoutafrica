@@ -27,9 +27,9 @@ export default function App() {
   // Active Admin Auth Session State - Defaults to false for public visitors
   const [adminAuthSession, setAdminAuthSession] = useState<boolean>(false);
 
-  // Admin Auth Modal State & Tab
+  // Auth Modal State & Tab
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup' | 'admin'>('signin');
+  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
 
   // Global Event Status ('On Sale' | 'Sold Out')
   const [eventStatus, setEventStatus] = useState<'On Sale' | 'Sold Out'>('On Sale');
@@ -61,8 +61,8 @@ export default function App() {
       if (hasSession) {
         setAdminAuthSession(true);
       } else {
-        // Prompt for admin credentials if accessing /admin without session
-        setAuthModalTab('admin');
+        // Prompt for sign in credentials if accessing /admin without session
+        setAuthModalTab('signin');
         setIsAuthModalOpen(true);
       }
     }
@@ -136,13 +136,13 @@ export default function App() {
     handleScrollToTickets();
   };
 
-  // Honeypot double-click trigger handler (unmasks auth modal)
+  // Honeypot double-click trigger handler (opens signin modal)
   const handleHoneypotDoubleClick = () => {
     if (!isAdminRoute) {
       window.history.pushState({}, '', '/admin');
       setCurrentPath('/admin');
     }
-    setAuthModalTab('admin');
+    setAuthModalTab('signin');
     setIsAuthModalOpen(true);
   };
 
@@ -180,10 +180,6 @@ export default function App() {
         onToggleSave={() => setIsSaved(!isSaved)}
         onOpenAuth={() => {
           setAuthModalTab('signin');
-          setIsAuthModalOpen(true);
-        }}
-        onOpenAdminAuth={() => {
-          setAuthModalTab('admin');
           setIsAuthModalOpen(true);
         }}
         isAdminLoggedIn={adminAuthSession}
