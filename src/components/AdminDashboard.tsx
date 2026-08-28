@@ -46,6 +46,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const fetchAdminData = async () => {
     setLoading(true);
     try {
+      // Check local cache first as immediate initial fallback
+      const cached = localStorage.getItem('korom_admin_settings_backup');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.channelId) setChannelId(parsed.channelId);
+          if (parsed.apiUsername) setApiUsername(parsed.apiUsername);
+          if (parsed.apiPassword) setApiPassword(parsed.apiPassword);
+          if (parsed.apiKey) setApiKey(parsed.apiKey);
+          if (parsed.eventStatus) setEventStatus(parsed.eventStatus);
+        } catch {
+          // ignore
+        }
+      }
+
       const res = await fetch('/api/admin/data');
       if (res.ok) {
         const data = await res.json();
@@ -56,6 +71,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           setApiPassword(data.settings.apiPassword || '');
           setEventStatus(data.settings.eventStatus || 'On Sale');
           if (onEventStatusChange) onEventStatusChange(data.settings.eventStatus || 'On Sale');
+          // Update local backup
+          localStorage.setItem('korom_admin_settings_backup', JSON.stringify(data.settings));
         }
         if (data.metrics) setMetrics(data.metrics);
         if (data.transactionLogs) setTransactionLogs(data.transactionLogs);
@@ -86,10 +103,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = { channelId, apiKey, apiUsername, apiPassword, eventStatus };
+      localStorage.setItem('korom_admin_settings_backup', JSON.stringify(payload));
+
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelId, apiKey, apiUsername, apiPassword, eventStatus }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setSaveSuccess(true);
