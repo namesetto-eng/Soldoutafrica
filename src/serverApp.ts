@@ -23,6 +23,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// URL Normalization Middleware for Vercel Serverless Rewrites
+app.use((req, _res, next) => {
+  // If Vercel rewrites to /api or / without path suffix, recover from originalUrl or headers if present
+  if (req.url === '/' || req.url === '/api' || req.url === '/api/') {
+    const rawMatch =
+      (req.headers['x-vercel-matched-path'] as string) ||
+      (req.headers['x-matched-path'] as string) ||
+      (req.headers['x-now-route-matches'] as string) ||
+      req.originalUrl;
+
+    if (rawMatch && rawMatch !== '/' && rawMatch !== '/api' && rawMatch !== '/api/') {
+      req.url = rawMatch;
+    }
+  }
+  next();
+});
+
 // Initial Seed Orders
 const initialSeedOrders: TransactionOrder[] = [
   {
@@ -68,7 +85,7 @@ const initialSeedOrders: TransactionOrder[] = [
 const defaultSettings: AdminSettings = {
   channelId: process.env.PAYHERO_CHANNEL_ID || '11026',
   apiKey: process.env.PAYHERO_API_KEY || '',
-  apiUsername: process.env.PAYHERO_API_USERNAME || '',
+  apiUsername: process.env.PAYHERO_API_USERNAME || 'nqV61Z87AWTOAU18K9r5',
   apiPassword: process.env.PAYHERO_API_PASSWORD || '',
   eventStatus: 'On Sale',
 };
@@ -77,7 +94,6 @@ export const adminSettings: AdminSettings = loadPersistedSettings(defaultSetting
 export const ordersStore: Map<string, TransactionOrder> = loadPersistedOrders(initialSeedOrders);
 
 // --- Safaricom Phone Number Formatting ---
-// PayHero API v2 expects standard local format starting with 0 (e.g. 0787677676 or 0112345678)
 export function formatKenyanPhoneLocal(rawPhone: string): string {
   let cleaned = rawPhone.replace(/\D/g, '');
   if (cleaned.startsWith('254') && cleaned.length === 12) {
@@ -88,7 +104,6 @@ export function formatKenyanPhoneLocal(rawPhone: string): string {
   return cleaned;
 }
 
-// International Kenyan format: 2547XXXXXXXX or 2541XXXXXXXX
 export function formatKenyanPhoneIntl(rawPhone: string): string {
   let cleaned = rawPhone.replace(/\D/g, '');
   if (cleaned.startsWith('0') && cleaned.length === 10) {
@@ -99,11 +114,11 @@ export function formatKenyanPhoneIntl(rawPhone: string): string {
   return cleaned;
 }
 
-// Build PayHero Authorization Header
-function getPayheroAuthHeader(): string {
-  const rawUsername = (adminSettings.apiUsername || process.env.PAYHERO_API_USERNAME || '').trim();
-  const rawPassword = (adminSettings.apiPassword || process.env.PAYHERO_API_PASSWORD || '').trim();
-  const rawKey = (adminSettings.apiKey || process.env.PAYHERO_API_KEY || '').trim();
+// Build PayHero Authorization Header (with support for runtime overrides)
+export function getPayheroAuthHeader(customUsername?: string, customPassword?: string, customKey?: string): string {
+  const rawUsername = (customUsername || adminSettings.apiUsername || process.env.PAYHERO_API_USERNAME || '').trim();
+  const rawPassword = (customPassword || adminSettings.apiPassword || process.env.PAYHERO_API_PASSWORD || '').trim();
+  const rawKey = (customKey || adminSettings.apiKey || process.env.PAYHERO_API_KEY || '').trim();
 
   if (rawUsername && rawPassword) {
     return `Basic ${Buffer.from(`${rawUsername}:${rawPassword}`).toString('base64')}`;
@@ -115,7 +130,6 @@ function getPayheroAuthHeader(): string {
     if (rawKey.startsWith('Basic ') || rawKey.startsWith('Bearer ')) {
       return rawKey;
     }
-    // Check if it's already a base64 encoded string with username:password
     return `Basic ${rawKey}`;
   }
   if (rawPassword) {
@@ -131,18 +145,23 @@ function getPayheroAuthHeader(): string {
 const apiRouter = express.Router();
 
 // Health check
-apiRouter.get('/health', (req, res) => {
+apiRouter.get(['/health', '/api/health'], (_req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
 // 1. STK Push Request Endpoint
-apiRouter.post('/payhero/stkpush', async (req, res) => {
+apiRouter.post(['/payhero/stkpush', '/api/payhero/stkpush'], async (req, res) => {
   try {
-    const { fullName, email, phone, amount, items } = req.body || {};
+    const { fullName, email, phone, amount, items, channelId, apiKey, apiUsername, apiPassword } = req.body || {};
 
     if (!fullName || !email || !phone || !amount || amount <= 0) {
       return res.status(400).json({ error: 'Missing or invalid order details.' });
     }
+
+    if (channelId) adminSettings.channelId = String(channelId);
+    if (apiKey) adminSettings.apiKey = String(apiKey);
+    if (apiUsername) adminSettings.apiUsername = String(apiUsername);
+    if (apiPassword) adminSettings.apiPassword = String(apiPassword);
 
     if (adminSettings.eventStatus === 'Sold Out') {
       return res.status(400).json({ error: 'Event tickets are currently SOLD OUT.' });
@@ -169,8 +188,8 @@ apiRouter.post('/payhero/stkpush', async (req, res) => {
     ordersStore.set(reference, newOrder);
     savePersistedOrders(ordersStore);
 
-    const authHeaderVal = getPayheroAuthHeader();
-    const channelIdNum = parseInt(String(adminSettings.channelId || '11026').trim(), 10) || 11026;
+    const authHeaderVal = getPayheroAuthHeader(apiUsername, apiPassword, apiKey);
+    const channelIdNum = parseInt(String(channelId || adminSettings.channelId || '11026').trim(), 10) || 11026;
 
     console.log(`[PayHero] Initiating STK Push for ${fullName} to phone ${localPhone} (${intlPhone}) - Amount: KES ${amount} (Ref: ${reference})`);
 
@@ -179,7 +198,6 @@ apiRouter.post('/payhero/stkpush', async (req, res) => {
     let isSuccess = false;
     let errorMessage = '';
 
-    // Function to dispatch request to PayHero
     const dispatchToPayhero = async (phoneNumberToUse: string) => {
       const payload = {
         amount: Math.round(Number(amount)),
@@ -212,11 +230,9 @@ apiRouter.post('/payhero/stkpush', async (req, res) => {
     };
 
     try {
-      // First attempt: Local phone format (e.g. 07XXXXXXXX as per PayHero official docs)
       let attempt = await dispatchToPayhero(localPhone);
       console.log(`[PayHero] Attempt 1 (Local format ${localPhone}) status:`, attempt.status, attempt.data);
 
-      // If failed due to phone format or error, retry with international format (2547XXXXXXXX)
       if (!attempt.ok || attempt.data?.success === false || attempt.data?.status === 'Failed') {
         console.log(`[PayHero] Attempt 1 not confirmed. Trying Attempt 2 with international format (${intlPhone})...`);
         const attempt2 = await dispatchToPayhero(intlPhone);
@@ -232,7 +248,6 @@ apiRouter.post('/payhero/stkpush', async (req, res) => {
         isSuccess = true;
         payheroCheckoutId = attempt.data?.CheckoutRequestID || attempt.data?.checkout_request_id || attempt.data?.reference || payheroCheckoutId;
       } else {
-        // Extract diagnostic message
         errorMessage =
           attempt.data?.message ||
           attempt.data?.error ||
@@ -263,15 +278,14 @@ apiRouter.post('/payhero/stkpush', async (req, res) => {
         payheroResponse,
       });
     } else {
-      console.warn(`[PayHero STK Notice] Dispatch warning: ${errorMessage}`);
       return res.json({
-        success: true, // Return reference so client can poll or retry
+        success: true,
         reference,
         status: 'PENDING',
         phone: localPhone,
         amount,
         warning: errorMessage,
-        message: `M-PESA prompt dispatched to ${localPhone}. If you do not see the prompt, ensure your phone screen is unlocked and network active.`,
+        message: `M-PESA prompt dispatched to ${localPhone}. If you do not see the prompt, ensure your phone screen is unlocked.`,
         checkoutRequestId: payheroCheckoutId,
         payheroResponse,
       });
@@ -282,8 +296,8 @@ apiRouter.post('/payhero/stkpush', async (req, res) => {
   }
 });
 
-// 2. PayHero Asynchronous Callback Webhook Listener
-apiRouter.post('/payhero/callback', (req, res) => {
+// 2. PayHero Callback Webhook Listener
+apiRouter.post(['/payhero/callback', '/api/payhero/callback'], (req, res) => {
   try {
     const payload = req.body || {};
     console.log('[PayHero Webhook] Received Callback Payload:', JSON.stringify(payload));
@@ -336,7 +350,7 @@ apiRouter.post('/payhero/callback', (req, res) => {
 });
 
 // 3. Poll Order Status Endpoint
-apiRouter.get('/payhero/status/:reference', (req, res) => {
+apiRouter.get(['/payhero/status/:reference', '/api/payhero/status/:reference'], (req, res) => {
   const { reference } = req.params;
   const order = ordersStore.get(reference);
 
@@ -354,9 +368,9 @@ apiRouter.get('/payhero/status/:reference', (req, res) => {
   return res.json(order);
 });
 
-// 4. Simulate Payment Success Endpoint (For testing/demo in admin)
-apiRouter.post('/payhero/simulate-payment', (req, res) => {
-  const { reference } = req.body;
+// 4. Simulate Payment Success Endpoint
+apiRouter.post(['/payhero/simulate-payment', '/api/payhero/simulate-payment'], (req, res) => {
+  const { reference } = req.body || {};
   const order = ordersStore.get(reference);
 
   if (!order) {
@@ -377,9 +391,17 @@ apiRouter.post('/payhero/simulate-payment', (req, res) => {
 });
 
 // 5. Admin Live PayHero Connection & Channel Diagnostic Test
-apiRouter.post('/admin/test-payhero', async (req, res) => {
+apiRouter.post(['/admin/test-payhero', '/api/admin/test-payhero'], async (req, res) => {
   try {
-    const authHeaderVal = getPayheroAuthHeader();
+    const { channelId, apiKey, apiUsername, apiPassword } = req.body || {};
+
+    if (channelId !== undefined) adminSettings.channelId = String(channelId);
+    if (apiKey !== undefined) adminSettings.apiKey = String(apiKey);
+    if (apiUsername !== undefined) adminSettings.apiUsername = String(apiUsername);
+    if (apiPassword !== undefined) adminSettings.apiPassword = String(apiPassword);
+    savePersistedSettings(adminSettings);
+
+    const authHeaderVal = getPayheroAuthHeader(apiUsername, apiPassword, apiKey);
     if (!authHeaderVal) {
       return res.status(400).json({
         success: false,
@@ -393,7 +415,6 @@ apiRouter.post('/admin/test-payhero', async (req, res) => {
       'Authorization': authHeaderVal,
     };
 
-    // Query payment channels
     let channelsData: any = null;
     let walletData: any = null;
     let channelsStatus = 0;
@@ -426,15 +447,15 @@ apiRouter.post('/admin/test-payhero', async (req, res) => {
       wallet: walletData,
       message: isConnected
         ? 'Successfully connected to PayHero API Gateway!'
-        : `PayHero connection returned HTTP ${channelsStatus || walletStatus}. Check your credentials.`,
+        : `PayHero connection returned HTTP ${channelsStatus || walletStatus || 401}. Please verify your API Key or Username & Password.`,
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: err?.message || 'Server error testing connection' });
   }
 });
 
 // 6. Admin Data & Metrics Endpoint
-apiRouter.get('/admin/data', (req, res) => {
+apiRouter.get(['/admin/data', '/api/admin/data'], (_req, res) => {
   const orders = Array.from(ordersStore.values());
 
   const paidOrders = orders.filter((o) => o.status === 'PAID');
@@ -457,8 +478,8 @@ apiRouter.get('/admin/data', (req, res) => {
   });
 });
 
-// 7. Admin Settings Update Endpoint (Persists permanently to storage)
-apiRouter.post('/admin/settings', (req, res) => {
+// 7. Admin Settings Update Endpoint
+apiRouter.post(['/admin/settings', '/api/admin/settings'], (req, res) => {
   const { channelId, apiKey, apiUsername, apiPassword, eventStatus } = req.body || {};
 
   if (channelId !== undefined) adminSettings.channelId = String(channelId);
@@ -467,22 +488,21 @@ apiRouter.post('/admin/settings', (req, res) => {
   if (apiPassword !== undefined) adminSettings.apiPassword = String(apiPassword);
   if (eventStatus !== undefined) adminSettings.eventStatus = eventStatus;
 
-  // Persist to permanent storage
   const saved = savePersistedSettings(adminSettings);
 
   return res.json({
     success: true,
     persisted: saved,
-    message: 'Admin PayHero settings updated and permanently saved to storage',
+    message: 'Admin PayHero settings updated successfully',
     settings: adminSettings,
   });
 });
 
-// Mount router on BOTH '/api' AND '/' to guarantee compatibility with all serverless rewrites and local servers
+// Mount router on both '/api' and '/'
 app.use('/api', apiRouter);
 app.use('/', apiRouter);
 
-// Fallback JSON 404 for unmatched API routes
+// Fallback JSON 404 handler for any unhandled routes
 app.use((req, res) => {
-  res.status(404).json({ error: `Route ${req.method} ${req.url} not found` });
+  res.status(404).json({ error: `API route ${req.method} ${req.url} not found` });
 });

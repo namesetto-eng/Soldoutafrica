@@ -148,6 +148,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const res = await fetch('/api/admin/test-payhero', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId, apiKey, apiUsername, apiPassword }),
       });
       const text = await res.text();
       let data: any = {};
@@ -184,6 +185,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           phone: testPhone.trim(),
           amount: 1, // KES 1 test transaction
           items: [{ tierName: 'LIVE STK TEST', quantity: 1, price: 1 }],
+          channelId,
+          apiKey,
+          apiUsername,
+          apiPassword,
         }),
       });
       const text = await res.text();

@@ -169,6 +169,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
 
+      let localSettings: any = {};
+      try {
+        const cached = localStorage.getItem('korom_admin_settings_backup');
+        if (cached) localSettings = JSON.parse(cached);
+      } catch {
+        // ignore
+      }
+
       const response = await fetch('/api/payhero/stkpush', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -178,6 +186,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           phone: form.phone.trim(),
           amount: totalAmount,
           items: selectedItems,
+          channelId: localSettings.channelId,
+          apiUsername: localSettings.apiUsername,
+          apiPassword: localSettings.apiPassword,
+          apiKey: localSettings.apiKey,
         }),
         signal: controller.signal,
       });

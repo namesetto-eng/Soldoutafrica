@@ -23,47 +23,28 @@ export interface AdminSettings {
   eventStatus: 'On Sale' | 'Sold Out';
 }
 
-function getStorageDir(): string {
-  // If running in Vercel or Lambda serverless environment, use /tmp directly
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT) {
-    const tmpDir = path.join('/tmp', 'korom_ticketing_data');
-    try {
-      if (!fs.existsSync(tmpDir)) {
-        fs.mkdirSync(tmpDir, { recursive: true });
-      }
-      return tmpDir;
-    } catch {
-      return '/tmp';
-    }
-  }
-
+function getSafeStoragePath(filename: string): string | null {
   try {
-    const defaultDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(defaultDir)) {
-      fs.mkdirSync(defaultDir, { recursive: true });
-    }
-    return defaultDir;
-  } catch {
-    const tmpDir = path.join('/tmp', 'korom_ticketing_data');
-    try {
-      if (!fs.existsSync(tmpDir)) {
-        fs.mkdirSync(tmpDir, { recursive: true });
+    const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
+    const baseDir = isServerless ? '/tmp' : path.join(process.cwd(), 'data');
+    if (!fs.existsSync(baseDir)) {
+      try {
+        fs.mkdirSync(baseDir, { recursive: true });
+      } catch {
+        return null;
       }
-      return tmpDir;
-    } catch {
-      return '/tmp';
     }
+    return path.join(baseDir, filename);
+  } catch {
+    return null;
   }
 }
 
-const STORAGE_DIR = getStorageDir();
-const SETTINGS_FILE = path.join(STORAGE_DIR, 'payhero_settings.json');
-const ORDERS_FILE = path.join(STORAGE_DIR, 'payhero_orders.json');
-
 export function loadPersistedSettings(defaultSettings: AdminSettings): AdminSettings {
   try {
-    if (fs.existsSync(SETTINGS_FILE)) {
-      const raw = fs.readFileSync(SETTINGS_FILE, 'utf-8');
+    const filePath = getSafeStoragePath('payhero_settings.json');
+    if (filePath && fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(raw);
       return {
         channelId: parsed.channelId || defaultSettings.channelId || '11026',
@@ -74,29 +55,32 @@ export function loadPersistedSettings(defaultSettings: AdminSettings): AdminSett
       };
     }
   } catch (err) {
-    console.warn('[Storage] Could not load persisted settings:', err);
+    console.warn('[Storage] Notice on loading settings:', err);
   }
   return defaultSettings;
 }
 
 export function savePersistedSettings(settings: AdminSettings): boolean {
   try {
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf-8');
-    return true;
+    const filePath = getSafeStoragePath('payhero_settings.json');
+    if (filePath) {
+      fs.writeFileSync(filePath, JSON.stringify(settings, null, 2), 'utf-8');
+      return true;
+    }
   } catch (err) {
-    console.error('[Storage] Error saving settings to disk:', err);
-    return false;
+    console.warn('[Storage] Notice saving settings to disk:', err);
   }
+  return false;
 }
 
 export function loadPersistedOrders(seedOrders: TransactionOrder[]): Map<string, TransactionOrder> {
   const map = new Map<string, TransactionOrder>();
-  // Add seed orders first
   seedOrders.forEach((o) => map.set(o.reference, o));
 
   try {
-    if (fs.existsSync(ORDERS_FILE)) {
-      const raw = fs.readFileSync(ORDERS_FILE, 'utf-8');
+    const filePath = getSafeStoragePath('payhero_orders.json');
+    if (filePath && fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         parsed.forEach((ord: TransactionOrder) => {
@@ -107,18 +91,21 @@ export function loadPersistedOrders(seedOrders: TransactionOrder[]): Map<string,
       }
     }
   } catch (err) {
-    console.warn('[Storage] Could not load persisted orders:', err);
+    console.warn('[Storage] Notice on loading orders:', err);
   }
   return map;
 }
 
 export function savePersistedOrders(ordersStore: Map<string, TransactionOrder>): boolean {
   try {
-    const ordersList = Array.from(ordersStore.values());
-    fs.writeFileSync(ORDERS_FILE, JSON.stringify(ordersList, null, 2), 'utf-8');
-    return true;
+    const filePath = getSafeStoragePath('payhero_orders.json');
+    if (filePath) {
+      const ordersList = Array.from(ordersStore.values());
+      fs.writeFileSync(filePath, JSON.stringify(ordersList, null, 2), 'utf-8');
+      return true;
+    }
   } catch (err) {
-    console.error('[Storage] Error saving orders to disk:', err);
-    return false;
+    console.warn('[Storage] Notice saving orders to disk:', err);
   }
+  return false;
 }
