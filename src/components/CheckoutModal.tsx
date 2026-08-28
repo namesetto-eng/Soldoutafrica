@@ -23,8 +23,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   totalItems,
   onClearCart,
 }) => {
-  if (!isOpen) return null;
-
   const [step, setStep] = useState<'details' | 'processing' | 'ticket'>('details');
   const [copiedOrderId, setCopiedOrderId] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -196,6 +194,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       console.error('Simulation error:', err);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">

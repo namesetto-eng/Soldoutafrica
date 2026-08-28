@@ -71,8 +71,15 @@ export const TicketingGrid: React.FC<TicketingGridProps> = ({
                   </div>
 
                   {/* Fixed Price Label */}
-                  <div className="text-xl sm:text-2xl font-extrabold text-purple-400 font-syne">
-                    {tier.formattedPrice}
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl sm:text-2xl font-extrabold text-purple-400 font-syne">
+                      {tier.formattedPrice}
+                    </span>
+                    {tier.subtext && (
+                      <span className="text-xs text-slate-400 font-medium">
+                        {tier.subtext}
+                      </span>
+                    )}
                   </div>
 
                   <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-sans">

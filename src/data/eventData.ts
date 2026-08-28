@@ -41,7 +41,7 @@ export const TICKET_TIERS: TicketTier[] = [
     name: 'VIBE STARS',
     price: 1500,
     currency: 'KES',
-    formattedPrice: 'KES 1,500.00',
+    formattedPrice: 'KES 1500.00',
     description: 'General Admission access to the main festival grounds, food street, art showcase, and live performances.',
     highlights: [
       'Full Day & Night Festival Access',
@@ -57,7 +57,7 @@ export const TICKET_TIERS: TicketTier[] = [
     name: 'VIP',
     price: 4000,
     currency: 'KES',
-    formattedPrice: 'KES 4,000.00',
+    formattedPrice: 'KES 4000.00',
     description: 'Premium experience featuring expedited express entry, elevated stage views, private luxury lounge & bar access.',
     highlights: [
       'Fast-track Express VIP Gate Access',
@@ -69,6 +69,24 @@ export const TICKET_TIERS: TicketTier[] = [
     badge: 'PREMIUM',
     popular: true,
     available: 450
+  },
+  {
+    id: 'table-of-10',
+    name: 'Table of 10',
+    price: 100000,
+    currency: 'KES',
+    formattedPrice: 'KES 100000.00',
+    subtext: '(Includes 10 tickets)',
+    description: 'Exclusive private table package for 10 people with VIP wristbands, dedicated hostess, and complimentary bottle service package.',
+    highlights: [
+      '10 VIP Full-Access Festival Wristbands',
+      'Reserved Raised Cabana Table with Stage View',
+      'Complimentary Premium Bottle Service Package',
+      'Dedicated Host & Private Table Waitstaff',
+      'Express VIP Valet Parking & Fast-track Gate'
+    ],
+    badge: 'TABLE OF 10',
+    available: 20
   }
 ];
 

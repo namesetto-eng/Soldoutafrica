@@ -10,6 +10,7 @@ import { CalendarModal } from './components/CalendarModal';
 import { MapModal } from './components/MapModal';
 import { ShareModal } from './components/ShareModal';
 import { CrossSellModal } from './components/CrossSellModal';
+import { SelectTicketsModal } from './components/SelectTicketsModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AdminAuthModal } from './components/AdminAuthModal';
 import { Footer } from './components/Footer';
@@ -85,9 +86,11 @@ export default function App() {
   const [quantities, setQuantities] = useState<TicketQuantity>({
     'vibe-stars': 0,
     vip: 0,
+    'table-of-10': 0,
   });
 
   // Modal Visibility States
+  const [isSelectTicketsOpen, setIsSelectTicketsOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
@@ -116,6 +119,7 @@ export default function App() {
     setQuantities({
       'vibe-stars': 0,
       vip: 0,
+      'table-of-10': 0,
     });
   };
 
@@ -178,6 +182,10 @@ export default function App() {
           setAuthModalTab('signin');
           setIsAuthModalOpen(true);
         }}
+        onOpenAdminAuth={() => {
+          setAuthModalTab('admin');
+          setIsAuthModalOpen(true);
+        }}
         isAdminLoggedIn={adminAuthSession}
         onOpenAdminDashboard={() => {
           window.history.pushState({}, '', '/admin');
@@ -211,7 +219,7 @@ export default function App() {
               onShare={() => setIsShareOpen(true)}
               isSaved={isSaved}
               onToggleSave={() => setIsSaved(!isSaved)}
-              onViewTicketsClick={handleScrollToTickets}
+              onViewTicketsClick={() => setIsSelectTicketsOpen(true)}
             />
 
             {/* Layout Grid: Left Content (2/3) + Right Sticky Cart Sidebar (1/3) */}
@@ -224,7 +232,7 @@ export default function App() {
                 <MainAnatomy
                   onOpenCalendar={() => setIsCalendarOpen(true)}
                   onOpenMap={() => setIsMapOpen(true)}
-                  onScrollToTickets={handleScrollToTickets}
+                  onScrollToTickets={() => setIsSelectTicketsOpen(true)}
                 />
 
                 {/* 4. Interactive Ticketing Grid (State-Driven Checkout) */}
@@ -268,6 +276,19 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         onSuccess={handleAdminAuthSuccess}
         onLockout={handleAdminLogOut}
+      />
+
+      {/* Modal: Select Tickets (Matching Screenshot Flow) */}
+      <SelectTicketsModal
+        isOpen={isSelectTicketsOpen}
+        onClose={() => setIsSelectTicketsOpen(false)}
+        tiers={TICKET_TIERS}
+        quantities={quantities}
+        onQuantityChange={handleQuantityChange}
+        onContinue={() => {
+          setIsSelectTicketsOpen(false);
+          setIsCheckoutOpen(true);
+        }}
       />
 
       {/* Interactive Customer Modals */}

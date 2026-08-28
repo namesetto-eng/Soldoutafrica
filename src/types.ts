@@ -4,6 +4,7 @@ export interface TicketTier {
   price: number;
   currency: string;
   formattedPrice: string;
+  subtext?: string;
   description: string;
   highlights: string[];
   badge?: string;

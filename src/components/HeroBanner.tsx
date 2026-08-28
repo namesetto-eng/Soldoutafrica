@@ -130,28 +130,31 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_0%,_rgba(0,0,0,0.5)_100%)] pointer-events-none" />
         </div>
 
-        {/* Mobile Floating Sticky Header Bar */}
-        <div className="relative z-20 flex sm:hidden items-center justify-between gap-2 mb-2">
+        {/* Mobile Floating Sticky Header Bar matching Screenshot 1 */}
+        <div className="relative z-20 flex sm:hidden items-center justify-between gap-2 mb-3">
           {/* Circular Back Arrow Button */}
           <button
             onClick={() => window.history.back()}
-            className="w-10 h-10 rounded-full bg-black/70 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-black transition-all shadow-lg active:scale-95"
+            className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-black transition-all shadow-lg active:scale-95 cursor-pointer"
             title="Back"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
 
-          {/* Centered Circular "SoldOutAfrica" Black Logo Badge */}
-          <div className="w-10 h-10 rounded-full bg-black border border-purple-500/60 flex items-center justify-center shadow-lg p-1">
-            <div className="w-full h-full rounded-full bg-gradient-to-tr from-purple-700 via-purple-600 to-fuchsia-500 flex items-center justify-center text-white text-[9px] font-black font-syne tracking-tighter shadow-inner">
-              SOA
-            </div>
+          {/* Centered Circular "SOLDOUT AFRICA" Black Logo Badge */}
+          <div className="w-12 h-12 rounded-full bg-black border border-white/20 flex flex-col items-center justify-center shadow-xl p-1 text-center">
+            <span className="font-syne font-black text-[7.5px] leading-tight text-white tracking-widest uppercase">
+              SOLDOUT
+            </span>
+            <span className="font-syne font-black text-[7.5px] leading-tight text-white tracking-widest uppercase">
+              AFRICA
+            </span>
           </div>
 
           {/* Circular Native Share Icon */}
           <button
             onClick={onShare}
-            className="w-10 h-10 rounded-full bg-black/70 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-black transition-all shadow-lg active:scale-95"
+            className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-black transition-all shadow-lg active:scale-95 cursor-pointer"
             title="Share Event"
           >
             <Share2 className="w-5 h-5" />
@@ -370,58 +373,62 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
         </div>
 
-        {/* Floating Pill Metadata Elements with Get Tickets & Countdown for Korom Festival Image */}
-        <div className="relative z-10 w-full mt-4 p-4.5 sm:p-5 rounded-2xl bg-black/75 backdrop-blur-md border border-purple-900/50 shadow-2xl space-y-3.5 text-left">
+        {/* Floating Pill Metadata Elements matching Screenshot 1 */}
+        <div className="relative z-10 w-full mt-4 p-4 sm:p-6 rounded-3xl bg-black/65 backdrop-blur-md border border-white/10 shadow-2xl space-y-3.5 text-left">
           
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {/* Category Badge */}
-            <div className="inline-block px-3 py-0.5 rounded-full bg-purple-950/90 border border-purple-800/60 text-purple-300 text-[10px] font-mono font-bold tracking-widest uppercase">
+          {/* Category Badge */}
+          <div>
+            <div className="inline-block px-4 py-1.5 rounded-full bg-black/60 border border-white/20 text-zinc-200 text-xs font-mono font-bold tracking-widest uppercase shadow-md">
               ENTERTAINMENT & ARTS
-            </div>
-
-            {/* Dynamic Live Countdown Box inside Image Banner */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-purple-950/80 border border-purple-500/50 text-purple-300 text-xs font-mono font-bold shadow-md">
-              <Clock className="w-3.5 h-3.5 text-purple-400 shrink-0 animate-pulse" />
-              <span>{timeRemaining || 'Calculated live...'}</span>
             </div>
           </div>
 
           {/* Main Event Header text */}
-          <h1 className="font-syne text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+          <h1 className="font-syne text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
             KOROM Festival
           </h1>
 
-          {/* Info Row 1 */}
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200 font-medium">
-            <span className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-purple-400" />
+          {/* Info Badges Row */}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-200 font-medium">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 border border-white/15 backdrop-blur-sm">
+              <Calendar className="w-3.5 h-3.5 text-zinc-300" />
               <span>Sat, Oct 10, 2026</span>
-            </span>
-            <span className="text-slate-600">•</span>
-            <span className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-purple-400" />
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 border border-white/15 backdrop-blur-sm">
+              <MapPin className="w-3.5 h-3.5 text-zinc-300" />
               <span>TBA</span>
-            </span>
-            <span className="text-slate-600">•</span>
-            <span className="flex items-center gap-1.5 text-purple-300">
-              <Users className="w-3.5 h-3.5 text-purple-400" />
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 border border-white/15 backdrop-blur-sm">
+              <Users className="w-3.5 h-3.5 text-zinc-300" />
               <span>By Korom festival</span>
-            </span>
+            </div>
           </div>
 
-          {/* Primary Action Button directly inside the Image Overlay */}
-          <div className="pt-1">
+          {/* Action Row: [Get Tickets] & [Countdown Pill] */}
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               onClick={onViewTicketsClick}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#7C3AED] hover:bg-purple-500 active:scale-95 text-white font-syne font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-purple-950/80 transition-all cursor-pointer"
+              className="flex-1 sm:flex-initial px-7 py-3 rounded-full bg-[#8B31FF] hover:bg-[#7822EE] active:scale-95 text-white font-syne font-bold text-sm tracking-wide flex items-center justify-center gap-2 shadow-xl shadow-purple-950/80 transition-all cursor-pointer"
             >
               <Ticket className="w-4 h-4 text-white" />
               <span>Get Tickets</span>
             </button>
+
+            <div className="flex-1 sm:flex-initial px-5 py-3 rounded-full bg-black/60 border border-white/20 text-zinc-200 text-xs font-mono font-bold flex items-center justify-center gap-2 backdrop-blur-sm shadow-md">
+              <Clock className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span>{timeRemaining || '43 days until event'}</span>
+            </div>
           </div>
 
         </div>
 
+      </div>
+
+      {/* SCROLL TO EXPLORE cue at bottom */}
+      <div className="flex flex-col items-center justify-center pt-3 pb-1 text-zinc-400 text-[11px] font-mono tracking-widest uppercase">
+        <span>SCROLL TO EXPLORE</span>
       </div>
 
     </section>

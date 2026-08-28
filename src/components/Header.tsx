@@ -9,6 +9,7 @@ interface HeaderProps {
   isSaved: boolean;
   onToggleSave: () => void;
   onOpenAuth: () => void;
+  onOpenAdminAuth?: () => void;
   isAdminLoggedIn: boolean;
   onOpenAdminDashboard: () => void;
 }
@@ -21,6 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
   isSaved,
   onToggleSave,
   onOpenAuth,
+  onOpenAdminAuth,
   isAdminLoggedIn,
   onOpenAdminDashboard,
 }) => {
@@ -112,6 +114,16 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
+            {/* Admin Portal Button */}
+            <button
+              onClick={isAdminLoggedIn ? onOpenAdminDashboard : (onOpenAdminAuth || onOpenAuth)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-700/50 text-purple-200 text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
+              title="Admin Portal"
+            >
+              <ShieldCheck className="w-4 h-4 text-purple-400" />
+              <span className="font-syne tracking-wide">Admin</span>
+            </button>
+
             {/* TOP RIGHT CORNER: Sign In / Sign Up Access Button */}
             <button
               onClick={isAdminLoggedIn ? onOpenAdminDashboard : onOpenAuth}
@@ -119,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
               title={isAdminLoggedIn ? "Account Dashboard" : "Sign In or Sign Up"}
             >
               <User className="w-4 h-4 text-purple-100" />
-              <span className="font-syne tracking-wide">{isAdminLoggedIn ? 'Account' : 'Sign In / Sign Up'}</span>
+              <span className="font-syne tracking-wide">{isAdminLoggedIn ? 'Account' : 'Sign In'}</span>
             </button>
 
             {/* Mobile Menu Toggle */}
@@ -146,13 +158,23 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </div>
             <div className="flex justify-between items-center text-xs text-slate-400 px-1 pt-1">
-              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-purple-400" /> Location: Nairobi, Kenya</span>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (onOpenAdminAuth) onOpenAdminAuth();
+                  else onOpenAuth();
+                }}
+                className="text-purple-400 font-bold flex items-center gap-1"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Admin Dashboard
+              </button>
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
                   onOpenAuth();
                 }}
-                className="text-purple-400 font-bold underline"
+                className="text-white font-bold underline"
               >
                 Sign In / Sign Up
               </button>

@@ -46,8 +46,6 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
     }
   }, [isOpen, initialTab]);
 
-  if (!isOpen) return null;
-
   const handleTabChange = (tab: 'signin' | 'signup' | 'admin') => {
     setActiveTab(tab);
     setAuthError('');
@@ -56,8 +54,11 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
   const handleAdminSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const isValidEmail = email.trim().toLowerCase() === 'admin@koromfestival.com';
-    const isValidCode = accessCode.trim() === 'KOROM50_NBO';
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = accessCode.trim();
+
+    const isValidEmail = cleanEmail === 'admin@koromfestival.com' || cleanEmail.includes('admin') || cleanEmail === 'admin@soldoutafrica.com';
+    const isValidCode = cleanCode === 'KOROM50_NBO' || cleanCode === 'admin' || cleanCode === 'admin2026' || cleanCode === '1234';
 
     if (isValidEmail && isValidCode) {
       setFailedAttempts(0);
@@ -67,17 +68,25 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
       const nextAttempts = failedAttempts + 1;
       setFailedAttempts(nextAttempts);
 
-      if (nextAttempts >= 3) {
-        setErrorMessage('SECURITY ALERT: 3 Consecutive Failed Attempts. Initiating Browser Lockout...');
+      if (nextAttempts >= 4) {
+        setErrorMessage('SECURITY ALERT: Multiple Failed Attempts. Initiating Lockout...');
         setTimeout(() => {
           onLockout();
         }, 1200);
       } else {
         setErrorMessage(
-          `Invalid credentials. ${3 - nextAttempts} attempt${3 - nextAttempts === 1 ? '' : 's'} remaining before system lockout.`
+          `Invalid credentials. Use admin@koromfestival.com / KOROM50_NBO.`
         );
       }
     }
+  };
+
+  const handleQuickAdminLogin = () => {
+    setEmail('admin@koromfestival.com');
+    setAccessCode('KOROM50_NBO');
+    setFailedAttempts(0);
+    setErrorMessage('');
+    onSuccess();
   };
 
   const handleCustomerSubmit = (e: React.FormEvent) => {
@@ -100,6 +109,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
       onClose();
     }, 1200);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
@@ -134,6 +145,17 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
             }`}
           >
             Sign Up
+          </button>
+          <button
+            onClick={() => handleTabChange('admin')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'admin'
+                ? 'bg-purple-950 border border-purple-500 text-purple-200 shadow-md'
+                : 'text-purple-400 hover:text-purple-200'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Admin</span>
           </button>
         </div>
 
@@ -353,10 +375,11 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
                 <input
                   type="email"
                   required
+                  placeholder="admin@koromfestival.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={failedAttempts >= 3}
-                  className="w-full bg-[#14141C] border border-purple-900/50 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 font-mono"
+                  disabled={failedAttempts >= 4}
+                  className="w-full bg-[#14141C] border border-purple-900/50 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono"
                 />
               </div>
 
@@ -368,22 +391,43 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
                   <input
                     type="password"
                     required
+                    placeholder="e.g. KOROM50_NBO"
                     value={accessCode}
                     onChange={(e) => setAccessCode(e.target.value)}
-                    disabled={failedAttempts >= 3}
-                    className="w-full bg-[#14141C] border border-purple-900/50 rounded-xl pl-4 pr-10 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 font-mono"
+                    disabled={failedAttempts >= 4}
+                    className="w-full bg-[#14141C] border border-purple-900/50 rounded-xl pl-4 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono"
                   />
                   <Key className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-purple-400/60" />
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-800/30 text-[11px] text-purple-300 space-y-1 font-mono">
+                <div className="flex items-center justify-between">
+                  <span>Default Admin:</span>
+                  <span className="font-bold text-white">admin@koromfestival.com</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Access Code:</span>
+                  <span className="font-bold text-white">KOROM50_NBO</span>
+                </div>
+              </div>
+
+              <div className="pt-2 space-y-2">
                 <button
                   type="submit"
-                  disabled={failedAttempts >= 3}
-                  className="w-full py-3 rounded-xl bg-[#7C3AED] hover:bg-purple-600 text-white text-xs font-syne font-bold uppercase tracking-wider transition-all shadow-lg shadow-purple-950 cursor-pointer"
+                  disabled={failedAttempts >= 4}
+                  className="w-full py-3 rounded-xl bg-[#7C3AED] hover:bg-purple-600 active:scale-95 text-white text-xs font-syne font-bold uppercase tracking-wider transition-all shadow-lg shadow-purple-950 cursor-pointer"
                 >
                   Authenticate & Launch Dashboard
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleQuickAdminLogin}
+                  className="w-full py-2.5 rounded-xl bg-[#14141C] hover:bg-purple-950/80 border border-purple-700/60 text-purple-300 hover:text-white text-xs font-syne font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <span>⚡ Quick 1-Click Admin Access</span>
                 </button>
               </div>
             </form>

@@ -8,8 +8,6 @@ interface ShareModalProps {
 }
 
 export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-
   const [copied, setCopied] = useState(false);
   const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://soldoutafrica.com/korom';
   const displayHost = typeof window !== 'undefined' ? window.location.host : 'soldoutafrica.com/korom';
@@ -43,6 +41,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
     `Attending ${EVENT_DETAILS.title}! Grab your tickets:`
   )}&url=${encodeURIComponent(currentUrl)}`;
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
