@@ -19,6 +19,8 @@ interface TransactionOrder {
 interface AdminSettings {
   channelId: string;
   apiKey: string;
+  apiUsername?: string;
+  apiPassword?: string;
   eventStatus: 'On Sale' | 'Sold Out';
 }
 
@@ -27,10 +29,23 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// CORS & Preflight Handling for all API requests
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // In-Memory Database Store for Orders & Admin Configuration
 const adminSettings: AdminSettings = {
   channelId: process.env.PAYHERO_CHANNEL_ID || '854',
   apiKey: process.env.PAYHERO_API_KEY || '',
+  apiUsername: process.env.PAYHERO_API_USERNAME || '',
+  apiPassword: process.env.PAYHERO_API_PASSWORD || '',
   eventStatus: 'On Sale',
 };
 
@@ -84,6 +99,8 @@ function formatKenyanPhone(rawPhone: string): string {
   let cleaned = rawPhone.replace(/\D/g, '');
   if (cleaned.startsWith('0')) {
     cleaned = '254' + cleaned.slice(1);
+  } else if (cleaned.startsWith('+254')) {
+    cleaned = cleaned.slice(1);
   } else if (cleaned.length === 9 && (cleaned.startsWith('7') || cleaned.startsWith('1'))) {
     cleaned = '254' + cleaned;
   }
@@ -128,7 +145,6 @@ app.post('/api/payhero/stkpush', async (req, res) => {
     const payheroPayload = {
       amount: Number(amount),
       phone_number: formattedPhone,
-      phone: formattedPhone,
       channel_id: Number(adminSettings.channelId) || 854,
       provider: 'm-pesa',
       external_reference: reference,
@@ -141,25 +157,41 @@ app.post('/api/payhero/stkpush', async (req, res) => {
 
     try {
       let authHeaderVal = '';
-      if (adminSettings.apiKey) {
-        const trimmedKey = adminSettings.apiKey.trim();
-        if (trimmedKey.startsWith('Basic ')) {
-          authHeaderVal = trimmedKey;
-        } else if (trimmedKey.includes(':')) {
-          authHeaderVal = `Basic ${Buffer.from(trimmedKey).toString('base64')}`;
+      const rawUsername = (adminSettings.apiUsername || process.env.PAYHERO_API_USERNAME || '').trim();
+      const rawPassword = (adminSettings.apiPassword || process.env.PAYHERO_API_PASSWORD || '').trim();
+      const rawKey = (adminSettings.apiKey || process.env.PAYHERO_API_KEY || '').trim();
+
+      if (rawUsername && rawPassword) {
+        authHeaderVal = `Basic ${Buffer.from(`${rawUsername}:${rawPassword}`).toString('base64')}`;
+      } else if (rawUsername && rawKey) {
+        authHeaderVal = `Basic ${Buffer.from(`${rawUsername}:${rawKey}`).toString('base64')}`;
+      } else if (rawPassword) {
+        if (rawPassword.startsWith('Basic ') || rawPassword.startsWith('Bearer ')) {
+          authHeaderVal = rawPassword;
+        } else if (rawPassword.includes(':')) {
+          authHeaderVal = `Basic ${Buffer.from(rawPassword).toString('base64')}`;
         } else {
-          authHeaderVal = `Basic ${trimmedKey}`;
+          authHeaderVal = `Basic ${Buffer.from(`:${rawPassword}`).toString('base64')}`;
+        }
+      } else if (rawKey) {
+        if (rawKey.startsWith('Basic ') || rawKey.startsWith('Bearer ')) {
+          authHeaderVal = rawKey;
+        } else if (rawKey.includes(':')) {
+          authHeaderVal = `Basic ${Buffer.from(rawKey).toString('base64')}`;
+        } else {
+          authHeaderVal = `Basic ${rawKey}`;
         }
       }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       };
       if (authHeaderVal) {
         headers['Authorization'] = authHeaderVal;
       }
 
-      console.log(`Initiating PayHero STK Push to ${formattedPhone} for KES ${amount}...`);
+      console.log(`[PayHero] Initiating STK Push to ${formattedPhone} for KES ${amount} (Ref: ${reference})...`);
 
       const response = await fetch('https://backend.payhero.co.ke/api/v2/payments', {
         method: 'POST',
@@ -168,15 +200,15 @@ app.post('/api/payhero/stkpush', async (req, res) => {
       });
 
       payheroResponse = await response.json().catch(() => ({}));
-      console.log('PayHero API Gateway Response:', response.status, JSON.stringify(payheroResponse));
+      console.log('[PayHero] Gateway Response Code:', response.status, JSON.stringify(payheroResponse));
 
-      if (response.ok && payheroResponse) {
+      if (payheroResponse) {
         if (payheroResponse?.CheckoutRequestID || payheroResponse?.checkout_request_id) {
           payheroCheckoutId = payheroResponse.CheckoutRequestID || payheroResponse.checkout_request_id;
         }
       }
-    } catch (err) {
-      console.log('PayHero API live request notice:', err);
+    } catch (err: any) {
+      console.log('[PayHero] Live gateway call notice:', err?.message || err);
     }
 
     newOrder.payheroCheckoutId = payheroCheckoutId;
@@ -193,6 +225,7 @@ app.post('/api/payhero/stkpush', async (req, res) => {
       payheroResponse,
     });
   } catch (error: any) {
+    console.error('[PayHero] Error in /api/payhero/stkpush:', error);
     return res.status(500).json({ error: error.message || 'Failed to process checkout' });
   }
 });
@@ -250,7 +283,7 @@ app.post('/api/payhero/callback', (req, res) => {
   }
 });
 
-// 3. Poll Order Status Endpoint (with 60s Expiration Window for M-PESA STK PIN entry)
+// 3. Poll Order Status Endpoint (with 180s Expiration Window for M-PESA STK PIN entry)
 app.get('/api/payhero/status/:reference', (req, res) => {
   const { reference } = req.params;
   const order = ordersStore.get(reference);
@@ -259,9 +292,9 @@ app.get('/api/payhero/status/:reference', (req, res) => {
     return res.status(404).json({ error: 'Order not found' });
   }
 
-  // Allow up to 60 seconds for customer to receive STK push & enter 4-digit PIN
+  // Allow up to 180 seconds for customer to receive STK push & enter 4-digit PIN
   const elapsedSeconds = (Date.now() - new Date(order.createdAt).getTime()) / 1000;
-  if (order.status === 'PENDING' && elapsedSeconds >= 60) {
+  if (order.status === 'PENDING' && elapsedSeconds >= 180) {
     order.status = 'FAILED';
     ordersStore.set(reference, order);
   }
@@ -316,10 +349,12 @@ app.get('/api/admin/data', (req, res) => {
 
 // 6. Admin Settings Update Endpoint
 app.post('/api/admin/settings', (req, res) => {
-  const { channelId, apiKey, eventStatus } = req.body;
+  const { channelId, apiKey, apiUsername, apiPassword, eventStatus } = req.body;
 
   if (channelId !== undefined) adminSettings.channelId = String(channelId);
   if (apiKey !== undefined) adminSettings.apiKey = String(apiKey);
+  if (apiUsername !== undefined) adminSettings.apiUsername = String(apiUsername);
+  if (apiPassword !== undefined) adminSettings.apiPassword = String(apiPassword);
   if (eventStatus !== undefined) adminSettings.eventStatus = eventStatus;
 
   return res.json({

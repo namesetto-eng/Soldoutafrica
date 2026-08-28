@@ -22,7 +22,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Settings State
   const [channelId, setChannelId] = useState('854');
   const [apiKey, setApiKey] = useState('');
+  const [apiUsername, setApiUsername] = useState('');
+  const [apiPassword, setApiPassword] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showApiPassword, setShowApiPassword] = useState(false);
   const [eventStatus, setEventStatus] = useState<'On Sale' | 'Sold Out'>('On Sale');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -49,6 +52,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (data.settings) {
           setChannelId(data.settings.channelId || '854');
           setApiKey(data.settings.apiKey || '');
+          setApiUsername(data.settings.apiUsername || '');
+          setApiPassword(data.settings.apiPassword || '');
           setEventStatus(data.settings.eventStatus || 'On Sale');
           if (onEventStatusChange) onEventStatusChange(data.settings.eventStatus || 'On Sale');
         }
@@ -84,7 +89,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelId, apiKey, eventStatus }),
+        body: JSON.stringify({ channelId, apiKey, apiUsername, apiPassword, eventStatus }),
       });
       if (res.ok) {
         setSaveSuccess(true);
@@ -309,12 +314,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
         </div>
 
-        <form onSubmit={handleSaveSettings} className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <form onSubmit={handleSaveSettings} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           
           {/* Field 1: PayHero Channel ID */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5 font-mono">
-              PayHero Channel ID
+              PayHero Channel ID *
             </label>
             <input
               type="text"
@@ -324,43 +329,88 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               placeholder="e.g. 854"
               className="w-full bg-[#0A0A0C] border border-purple-900/50 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-purple-500"
             />
-            <p className="text-[11px] text-slate-500 mt-1">Your assigned PayHero channel ID for STK Push</p>
+            <p className="text-[11px] text-slate-500 mt-1">Your registered PayHero channel ID</p>
           </div>
 
-          {/* Field 2: PayHero API Private Key */}
+          {/* Field 2: PayHero API Username */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5 font-mono">
-              PayHero API Private Key
+              PayHero API Username *
+            </label>
+            <input
+              type="text"
+              value={apiUsername}
+              onChange={(e) => setApiUsername(e.target.value)}
+              placeholder="e.g. your_api_username"
+              className="w-full bg-[#0A0A0C] border border-purple-900/50 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-purple-500"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">PayHero account username for Basic Auth</p>
+          </div>
+
+          {/* Field 3: PayHero API Password */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5 font-mono">
+              PayHero API Password *
+            </label>
+            <div className="relative">
+              <input
+                type={showApiPassword ? 'text' : 'password'}
+                value={apiPassword}
+                onChange={(e) => setApiPassword(e.target.value)}
+                placeholder="PayHero API Password"
+                className="w-full bg-[#0A0A0C] border border-purple-900/50 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-purple-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiPassword(!showApiPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+              >
+                {showApiPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1">Enables swift automated M-Pesa STK push</p>
+          </div>
+
+          {/* Field 4: PayHero API Key / Token */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5 font-mono">
+              PayHero API Key (Optional)
             </label>
             <div className="relative">
               <input
                 type={showApiKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Secret Key / Basic Auth token"
+                placeholder="Bearer or Secret Key (Optional)"
                 className="w-full bg-[#0A0A0C] border border-purple-900/50 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-purple-500"
               />
               <button
                 type="button"
                 onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
               >
                 {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-[11px] text-slate-500 mt-1">Bearer or Basic auth token for PayHero endpoint</p>
+            <p className="text-[11px] text-slate-500 mt-1">Optional secondary authorization key</p>
           </div>
 
-          {/* Field 3: Global Event Status Toggle */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5 font-mono">
-              Event Status Global Switch
-            </label>
-            <div className="flex items-center gap-3 bg-[#0A0A0C] p-1.5 rounded-xl border border-purple-900/50">
+          {/* Field 5: Global Event Status Toggle */}
+          <div className="sm:col-span-2 lg:col-span-4 border-t border-purple-900/30 pt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-slate-300 font-mono">
+                Event Ticket Sales Global Switch
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Currently: <strong className={eventStatus === 'On Sale' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>{eventStatus}</strong>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 bg-[#0A0A0C] p-1.5 rounded-xl border border-purple-900/50 w-full sm:w-64">
               <button
                 type="button"
                 onClick={() => setEventStatus('On Sale')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   eventStatus === 'On Sale'
                     ? 'bg-emerald-600 text-white shadow-md'
                     : 'text-slate-500 hover:text-slate-300'
@@ -371,7 +421,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setEventStatus('Sold Out')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   eventStatus === 'Sold Out'
                     ? 'bg-red-600 text-white shadow-md'
                     : 'text-slate-500 hover:text-slate-300'
@@ -380,18 +430,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 Sold Out
               </button>
             </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Currently: <strong className={eventStatus === 'On Sale' ? 'text-emerald-400' : 'text-red-400'}>{eventStatus}</strong>
-            </p>
           </div>
 
-          <div className="sm:col-span-3 flex justify-end">
+          <div className="sm:col-span-2 lg:col-span-4 flex justify-end pt-2">
             <button
               type="submit"
-              className="px-6 py-3 rounded-xl bg-[#7C3AED] hover:bg-purple-500 text-white font-syne font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg"
+              className="px-6 py-3.5 rounded-xl bg-[#7C3AED] hover:bg-purple-500 text-white font-syne font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg cursor-pointer active:scale-95 transition-all"
             >
               <Save className="w-4 h-4" />
-              <span>Save Admin Configuration</span>
+              <span>Save PayHero Credentials & Settings</span>
             </button>
           </div>
 
