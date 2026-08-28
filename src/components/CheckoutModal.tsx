@@ -46,9 +46,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [form, setForm] = useState<CustomerDetails>({
     fullName: '',
     email: '',
-    phone: '254',
+    phone: '',
     paymentMethod: 'mpesa',
-    mpesaNumber: '254',
+    mpesaNumber: '',
   });
 
   const [issuedTicket, setIssuedTicket] = useState<IssuedTicket | null>(null);
@@ -74,7 +74,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               ...prev,
               email: prev.email || parsed.email,
               fullName: prev.fullName || parsed.name || '',
-              phone: prev.phone && prev.phone !== '254' ? prev.phone : (parsed.phone || '254'),
+              phone: prev.phone || parsed.phone || '',
             }));
           }
         }
@@ -116,13 +116,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     onClearCart();
   };
 
-  // Poll order status & 60s Countdown Timer when processing PayHero payment
+  // Poll order status & Countdown Timer when processing PayHero payment
   useEffect(() => {
     let pollInterval: any = null;
     let timerInterval: any = null;
 
     if (step === 'processing' && activeReference) {
-      setTimeLeft(60);
+      setTimeLeft(90);
 
       timerInterval = setInterval(() => {
         setTimeLeft((prev) => {
@@ -136,7 +136,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       pollInterval = setInterval(async () => {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2500);
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
           const res = await fetch(`/api/payhero/status/${activeReference}`, {
             signal: controller.signal,
           });
@@ -162,18 +162,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     };
   }, [step, activeReference]);
 
-  const handleSubmitOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmitOrder = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setErrorMessage('');
 
     if (!form.fullName.trim() || !form.email.trim() || !form.phone.trim()) {
-      setErrorMessage('Please fill in your full name, email address, and M-Pesa phone number.');
+      setErrorMessage('Please fill in your full name, email address, and Safaricom M-Pesa phone number.');
       return;
     }
 
-    const formattedPhone = normalizeKenyanPhone(form.phone);
-    if (formattedPhone.length < 10) {
-      setErrorMessage('Please provide a valid Kenyan phone number (e.g. 0712345678, 0143115691, or 254...)');
+    const cleanInput = form.phone.replace(/\D/g, '');
+    if (cleanInput.length < 9) {
+      setErrorMessage('Please provide a valid 10-digit Kenyan phone number (e.g. 0712345678 or 0112345678).');
       return;
     }
 
@@ -183,7 +183,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       const response = await fetch('/api/payhero/stkpush', {
         method: 'POST',
@@ -191,7 +191,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         body: JSON.stringify({
           fullName: form.fullName.trim(),
           email: form.email.trim(),
-          phone: formattedPhone,
+          phone: form.phone.trim(),
           amount: totalAmount,
           items: selectedItems,
         }),
@@ -200,17 +200,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
       clearTimeout(timeoutId);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.reference) {
-          setActiveReference(data.reference);
-        }
+      const data = await response.json().catch(() => ({}));
+      if (data.reference) {
+        setActiveReference(data.reference);
       }
+      setStep('processing');
+      setTimeLeft(90);
     } catch (err) {
       console.log('Payment dispatch client notice:', err);
+      setStep('processing');
+      setTimeLeft(90);
     } finally {
       setIsSubmitting(false);
-      setStep('processing');
     }
   };
 

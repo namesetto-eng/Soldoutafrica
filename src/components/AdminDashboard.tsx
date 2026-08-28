@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Key, ShieldCheck, DollarSign, Ticket, Activity, RefreshCw, CheckCircle2, Clock, AlertTriangle, Power, ArrowLeft, Save, Eye, EyeOff, Search } from 'lucide-react';
+import { Lock, Key, ShieldCheck, DollarSign, Ticket, Activity, RefreshCw, CheckCircle2, Clock, AlertTriangle, Power, ArrowLeft, Save, Eye, EyeOff, Search, AlertCircle, Smartphone } from 'lucide-react';
 import { downloadTicketPDF } from '../utils/pdfGenerator';
 import { IssuedTicket } from '../types';
 
@@ -28,6 +28,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [showApiPassword, setShowApiPassword] = useState(false);
   const [eventStatus, setEventStatus] = useState<'On Sale' | 'Sold Out'>('On Sale');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // PayHero Live Diagnostic Test State
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState<any>(null);
+  const [testPhone, setTestPhone] = useState('');
+  const [testStkLoading, setTestStkLoading] = useState(false);
+  const [testStkResult, setTestStkResult] = useState<any>(null);
 
   // Metrics State
   const [metrics, setMetrics] = useState({
@@ -118,6 +125,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     } catch (err) {
       console.error('Failed to update admin settings:', err);
+    }
+  };
+
+  const handleTestPayHeroConnection = async () => {
+    setTestLoading(true);
+    setTestResult(null);
+    try {
+      // First save current settings so backend uses latest
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId, apiKey, apiUsername, apiPassword, eventStatus }),
+      });
+
+      const res = await fetch('/api/admin/test-payhero', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      setTestResult(data);
+    } catch (err: any) {
+      setTestResult({ success: false, error: err?.message || 'Network error connecting to backend' });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const handleSendTestStkPush = async () => {
+    if (!testPhone.trim()) {
+      setTestStkResult({ success: false, error: 'Please enter a Safaricom phone number to test (e.g. 0712345678).' });
+      return;
+    }
+    setTestStkLoading(true);
+    setTestStkResult(null);
+    try {
+      const res = await fetch('/api/payhero/stkpush', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: 'PayHero Live Test',
+          email: 'test@payhero.co.ke',
+          phone: testPhone.trim(),
+          amount: 1, // KES 1 test transaction
+          items: [{ tierName: 'LIVE STK TEST', quantity: 1, price: 1 }],
+        }),
+      });
+      const data = await res.json();
+      setTestStkResult(data);
+      fetchAdminData();
+    } catch (err: any) {
+      setTestStkResult({ success: false, error: err?.message || 'Failed to dispatch test prompt' });
+    } finally {
+      setTestStkLoading(false);
     }
   };
 
@@ -452,7 +512,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          <div className="sm:col-span-2 lg:col-span-4 flex justify-end pt-2">
+          <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center justify-between gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleTestPayHeroConnection}
+              disabled={testLoading}
+              className="px-5 py-3 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-700/50 font-syne font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg cursor-pointer transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${testLoading ? 'animate-spin' : ''}`} />
+              <span>{testLoading ? 'Checking Connection...' : '🔌 Verify PayHero Connection & Channels'}</span>
+            </button>
+
             <button
               type="submit"
               className="px-6 py-3.5 rounded-xl bg-[#7C3AED] hover:bg-purple-500 text-white font-syne font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg cursor-pointer active:scale-95 transition-all"
@@ -463,6 +533,102 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
         </form>
+
+        {/* Diagnostic Status Box */}
+        {testResult && (
+          <div className={`mt-4 p-4 rounded-2xl border text-xs space-y-2 font-mono ${
+            testResult.success
+              ? 'bg-emerald-950/40 border-emerald-600/50 text-emerald-300'
+              : 'bg-red-950/40 border-red-700/50 text-red-300'
+          }`}>
+            <div className="flex items-center gap-2 font-bold text-sm font-syne">
+              {testResult.success ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <AlertCircle className="w-5 h-5 text-red-400" />}
+              <span>{testResult.message || (testResult.success ? 'PayHero Gateway Connected' : 'Connection Failed')}</span>
+            </div>
+            {testResult.wallet?.response?.balance !== undefined && (
+              <p className="text-slate-300 font-sans">
+                <strong>PayHero Service Wallet Balance:</strong> KES {Number(testResult.wallet.response.balance).toLocaleString()}
+              </p>
+            )}
+            {testResult.channels?.response && (
+              <p className="text-slate-300 font-sans">
+                <strong>Registered Channels:</strong> {JSON.stringify(testResult.channels.response)}
+              </p>
+            )}
+            {testResult.error && (
+              <p className="text-red-300 font-sans">
+                <strong>Error Details:</strong> {testResult.error}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Live STK Push Test Box */}
+        <div className="mt-6 pt-6 border-t border-purple-900/30">
+          <div className="p-5 rounded-2xl bg-[#0A0A0C] border border-purple-900/40 space-y-4">
+            <div>
+              <h3 className="font-syne text-sm font-bold text-white flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-purple-400" />
+                <span>Test Live Safaricom STK Push Prompt Delivery</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Enter your Safaricom mobile number (e.g. <span className="font-mono text-purple-300">0712345678</span> or <span className="font-mono text-purple-300">0112345678</span>) to dispatch a live test prompt (KES 1) and confirm your phone immediately receives the M-Pesa PIN dialog.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="tel"
+                placeholder="e.g. 0712345678 or 0112345678"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+                className="flex-1 bg-[#121218] border border-purple-900/50 rounded-xl px-4 py-2.5 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-purple-500"
+              />
+              <button
+                type="button"
+                onClick={handleSendTestStkPush}
+                disabled={testStkLoading}
+                className="px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-syne font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {testStkLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Dispatching Prompt...</span>
+                  </>
+                ) : (
+                  <>
+                    <Smartphone className="w-4 h-4" />
+                    <span>Send Test STK Push</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {testStkResult && (
+              <div className={`p-3.5 rounded-xl border text-xs ${
+                testStkResult.success
+                  ? 'bg-emerald-950/40 border-emerald-600/40 text-emerald-200'
+                  : 'bg-red-950/40 border-red-700/40 text-red-200'
+              }`}>
+                <div className="font-semibold flex items-center gap-1.5 mb-1">
+                  {testStkResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-red-400" />}
+                  <span>{testStkResult.message || testStkResult.error || 'Test STK Dispatched'}</span>
+                </div>
+                {testStkResult.checkoutRequestId && (
+                  <p className="font-mono text-[11px] text-slate-400">
+                    Checkout Request ID: {testStkResult.checkoutRequestId}
+                  </p>
+                )}
+                {testStkResult.payheroResponse && (
+                  <p className="font-mono text-[11px] text-slate-400 mt-1">
+                    PayHero Response: {JSON.stringify(testStkResult.payheroResponse)}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
       </section>
 
       {/* 3. Real-Time Transaction Logs Table */}

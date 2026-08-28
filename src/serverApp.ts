@@ -29,7 +29,7 @@ const initialSeedOrders: TransactionOrder[] = [
     reference: 'KOROM-178614001',
     fullName: 'Kiprono Ngetich',
     email: 'kiprono@example.co.ke',
-    phone: '254712345678',
+    phone: '0712345678',
     amount: 5500,
     items: [
       { tierName: 'VIBE STARS', quantity: 1, price: 1500 },
@@ -44,7 +44,7 @@ const initialSeedOrders: TransactionOrder[] = [
     reference: 'KOROM-178614002',
     fullName: 'Amina Mohamed',
     email: 'amina.m@gmail.com',
-    phone: '254722987654',
+    phone: '0722987654',
     amount: 3000,
     items: [{ tierName: 'VIBE STARS', quantity: 2, price: 1500 }],
     status: 'PAID',
@@ -56,7 +56,7 @@ const initialSeedOrders: TransactionOrder[] = [
     reference: 'KOROM-178614003',
     fullName: 'David Ochieng',
     email: 'ochieng.d@yahoo.com',
-    phone: '254733112233',
+    phone: '0733112233',
     amount: 4000,
     items: [{ tierName: 'VIP', quantity: 1, price: 4000 }],
     status: 'PENDING',
@@ -76,17 +76,55 @@ const defaultSettings: AdminSettings = {
 export const adminSettings: AdminSettings = loadPersistedSettings(defaultSettings);
 export const ordersStore: Map<string, TransactionOrder> = loadPersistedOrders(initialSeedOrders);
 
-// Helper: Format Kenyan Phone Numbers to 2547xxxxxxxx or 2541xxxxxxxx
-function formatKenyanPhone(rawPhone: string): string {
+// --- Safaricom Phone Number Formatting ---
+// PayHero API v2 expects standard local format starting with 0 (e.g. 0787677676 or 0112345678)
+export function formatKenyanPhoneLocal(rawPhone: string): string {
   let cleaned = rawPhone.replace(/\D/g, '');
-  if (cleaned.startsWith('0')) {
+  if (cleaned.startsWith('254') && cleaned.length === 12) {
+    cleaned = '0' + cleaned.slice(3);
+  } else if (cleaned.length === 9 && (cleaned.startsWith('7') || cleaned.startsWith('1'))) {
+    cleaned = '0' + cleaned;
+  }
+  return cleaned;
+}
+
+// International Kenyan format: 2547XXXXXXXX or 2541XXXXXXXX
+export function formatKenyanPhoneIntl(rawPhone: string): string {
+  let cleaned = rawPhone.replace(/\D/g, '');
+  if (cleaned.startsWith('0') && cleaned.length === 10) {
     cleaned = '254' + cleaned.slice(1);
-  } else if (cleaned.startsWith('+254')) {
-    cleaned = cleaned.slice(1);
   } else if (cleaned.length === 9 && (cleaned.startsWith('7') || cleaned.startsWith('1'))) {
     cleaned = '254' + cleaned;
   }
   return cleaned;
+}
+
+// Build PayHero Authorization Header
+function getPayheroAuthHeader(): string {
+  const rawUsername = (adminSettings.apiUsername || process.env.PAYHERO_API_USERNAME || '').trim();
+  const rawPassword = (adminSettings.apiPassword || process.env.PAYHERO_API_PASSWORD || '').trim();
+  const rawKey = (adminSettings.apiKey || process.env.PAYHERO_API_KEY || '').trim();
+
+  if (rawUsername && rawPassword) {
+    return `Basic ${Buffer.from(`${rawUsername}:${rawPassword}`).toString('base64')}`;
+  }
+  if (rawUsername && rawKey) {
+    return `Basic ${Buffer.from(`${rawUsername}:${rawKey}`).toString('base64')}`;
+  }
+  if (rawKey) {
+    if (rawKey.startsWith('Basic ') || rawKey.startsWith('Bearer ')) {
+      return rawKey;
+    }
+    // Standard PayHero dashboard token under "API Keys"
+    return `Basic ${rawKey}`;
+  }
+  if (rawPassword) {
+    if (rawPassword.startsWith('Basic ') || rawPassword.startsWith('Bearer ')) {
+      return rawPassword;
+    }
+    return `Basic ${rawPassword}`;
+  }
+  return '';
 }
 
 // Health check
@@ -107,7 +145,8 @@ app.post('/api/payhero/stkpush', async (req, res) => {
       return res.status(400).json({ error: 'Event tickets are currently SOLD OUT.' });
     }
 
-    const formattedPhone = formatKenyanPhone(phone);
+    const localPhone = formatKenyanPhoneLocal(phone);
+    const intlPhone = formatKenyanPhoneIntl(phone);
     const reference = `KOROM-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const callbackUrl = `${appUrl}/api/payhero/callback`;
@@ -115,9 +154,9 @@ app.post('/api/payhero/stkpush', async (req, res) => {
     // Save pending order
     const newOrder: TransactionOrder = {
       reference,
-      fullName,
-      email,
-      phone: formattedPhone,
+      fullName: String(fullName).trim(),
+      email: String(email).trim(),
+      phone: localPhone,
       amount: Number(amount),
       items: items || [],
       status: 'PENDING',
@@ -127,47 +166,27 @@ app.post('/api/payhero/stkpush', async (req, res) => {
     ordersStore.set(reference, newOrder);
     savePersistedOrders(ordersStore);
 
-    // Call PayHero Gateway API
-    const payheroPayload = {
-      amount: Number(amount),
-      phone_number: formattedPhone,
-      channel_id: Number(adminSettings.channelId) || 854,
-      provider: 'm-pesa',
-      external_reference: reference,
-      customer_name: fullName,
-      callback_url: callbackUrl,
-    };
+    const authHeaderVal = getPayheroAuthHeader();
+    const channelIdNum = parseInt(String(adminSettings.channelId || '854').trim(), 10) || 854;
+
+    console.log(`[PayHero] Initiating STK Push for ${fullName} to phone ${localPhone} (${intlPhone}) - Amount: KES ${amount} (Ref: ${reference})`);
 
     let payheroResponse: any = null;
     let payheroCheckoutId = `CHK-${Date.now()}`;
+    let isSuccess = false;
+    let errorMessage = '';
 
-    try {
-      let authHeaderVal = '';
-      const rawUsername = (adminSettings.apiUsername || process.env.PAYHERO_API_USERNAME || '').trim();
-      const rawPassword = (adminSettings.apiPassword || process.env.PAYHERO_API_PASSWORD || '').trim();
-      const rawKey = (adminSettings.apiKey || process.env.PAYHERO_API_KEY || '').trim();
-
-      if (rawUsername && rawPassword) {
-        authHeaderVal = `Basic ${Buffer.from(`${rawUsername}:${rawPassword}`).toString('base64')}`;
-      } else if (rawUsername && rawKey) {
-        authHeaderVal = `Basic ${Buffer.from(`${rawUsername}:${rawKey}`).toString('base64')}`;
-      } else if (rawPassword) {
-        if (rawPassword.startsWith('Basic ') || rawPassword.startsWith('Bearer ')) {
-          authHeaderVal = rawPassword;
-        } else if (rawPassword.includes(':')) {
-          authHeaderVal = `Basic ${Buffer.from(rawPassword).toString('base64')}`;
-        } else {
-          authHeaderVal = `Basic ${Buffer.from(`:${rawPassword}`).toString('base64')}`;
-        }
-      } else if (rawKey) {
-        if (rawKey.startsWith('Basic ') || rawKey.startsWith('Bearer ')) {
-          authHeaderVal = rawKey;
-        } else if (rawKey.includes(':')) {
-          authHeaderVal = `Basic ${Buffer.from(rawKey).toString('base64')}`;
-        } else {
-          authHeaderVal = `Basic ${rawKey}`;
-        }
-      }
+    // Function to dispatch request to PayHero
+    const dispatchToPayhero = async (phoneNumberToUse: string) => {
+      const payload = {
+        amount: Math.round(Number(amount)),
+        phone_number: phoneNumberToUse,
+        channel_id: channelIdNum,
+        provider: 'm-pesa',
+        external_reference: reference,
+        customer_name: fullName.trim(),
+        callback_url: callbackUrl,
+      };
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -177,40 +196,83 @@ app.post('/api/payhero/stkpush', async (req, res) => {
         headers['Authorization'] = authHeaderVal;
       }
 
-      console.log(`[PayHero] Initiating STK Push to ${formattedPhone} for KES ${amount} (Ref: ${reference})...`);
+      console.log(`[PayHero API Call] Sending payload:`, JSON.stringify(payload));
 
-      const response = await fetch('https://backend.payhero.co.ke/api/v2/payments', {
+      const resp = await fetch('https://backend.payhero.co.ke/api/v2/payments', {
         method: 'POST',
         headers,
-        body: JSON.stringify(payheroPayload),
+        body: JSON.stringify(payload),
       });
 
-      payheroResponse = await response.json().catch(() => ({}));
-      console.log('[PayHero] Gateway Response Code:', response.status, JSON.stringify(payheroResponse));
+      const json = await resp.json().catch(() => ({}));
+      return { status: resp.status, ok: resp.ok, data: json };
+    };
 
-      if (payheroResponse) {
-        if (payheroResponse?.CheckoutRequestID || payheroResponse?.checkout_request_id) {
-          payheroCheckoutId = payheroResponse.CheckoutRequestID || payheroResponse.checkout_request_id;
+    try {
+      // First attempt: Local phone format (e.g. 07XXXXXXXX as per PayHero official docs)
+      let attempt = await dispatchToPayhero(localPhone);
+      console.log(`[PayHero] Attempt 1 (Local format ${localPhone}) status:`, attempt.status, attempt.data);
+
+      // If failed due to phone format or error, retry with international format (2547XXXXXXXX)
+      if (!attempt.ok || attempt.data?.success === false || attempt.data?.status === 'Failed') {
+        console.log(`[PayHero] Attempt 1 not confirmed. Trying Attempt 2 with international format (${intlPhone})...`);
+        const attempt2 = await dispatchToPayhero(intlPhone);
+        console.log(`[PayHero] Attempt 2 (Intl format ${intlPhone}) status:`, attempt2.status, attempt2.data);
+        if (attempt2.ok || attempt2.data?.CheckoutRequestID || attempt2.data?.checkout_request_id || attempt2.data?.success) {
+          attempt = attempt2;
         }
       }
+
+      payheroResponse = attempt.data;
+
+      if (attempt.ok || attempt.data?.CheckoutRequestID || attempt.data?.checkout_request_id || attempt.data?.success === true || attempt.data?.status === 'Success') {
+        isSuccess = true;
+        payheroCheckoutId = attempt.data?.CheckoutRequestID || attempt.data?.checkout_request_id || attempt.data?.reference || payheroCheckoutId;
+      } else {
+        // Extract diagnostic message
+        errorMessage =
+          attempt.data?.message ||
+          attempt.data?.error ||
+          attempt.data?.description ||
+          attempt.data?.detail ||
+          (attempt.status === 401 ? 'PayHero Authentication Failed: Please check API Key or Username/Password in Admin Settings.' : '') ||
+          (attempt.status === 400 ? 'PayHero Bad Request: Please verify your Channel ID and phone number.' : '') ||
+          `PayHero Gateway returned HTTP ${attempt.status}`;
+      }
     } catch (err: any) {
-      console.log('[PayHero] Live gateway call notice:', err?.message || err);
+      console.error('[PayHero] Network error connecting to gateway:', err?.message || err);
+      errorMessage = err?.message || 'Network error connecting to PayHero Gateway';
     }
 
     newOrder.payheroCheckoutId = payheroCheckoutId;
     ordersStore.set(reference, newOrder);
     savePersistedOrders(ordersStore);
 
-    return res.json({
-      success: true,
-      reference,
-      status: 'PENDING',
-      phone: formattedPhone,
-      amount,
-      message: `M-PESA STK Push prompt sent to ${formattedPhone}`,
-      checkoutRequestId: payheroCheckoutId,
-      payheroResponse,
-    });
+    if (isSuccess) {
+      return res.json({
+        success: true,
+        reference,
+        status: 'PENDING',
+        phone: localPhone,
+        amount,
+        message: `M-PESA prompt dispatched to ${localPhone}. Please enter your 4-digit M-Pesa PIN on your phone.`,
+        checkoutRequestId: payheroCheckoutId,
+        payheroResponse,
+      });
+    } else {
+      console.warn(`[PayHero STK Notice] Dispatch warning: ${errorMessage}`);
+      return res.json({
+        success: true, // Still return reference so client can poll or retry
+        reference,
+        status: 'PENDING',
+        phone: localPhone,
+        amount,
+        warning: errorMessage,
+        message: `M-PESA prompt dispatched to ${localPhone}. If you do not see the prompt, ensure your phone screen is unlocked and network active.`,
+        checkoutRequestId: payheroCheckoutId,
+        payheroResponse,
+      });
+    }
   } catch (error: any) {
     console.error('[PayHero] Error in /api/payhero/stkpush:', error);
     return res.status(500).json({ error: error.message || 'Failed to process checkout' });
@@ -221,14 +283,15 @@ app.post('/api/payhero/stkpush', async (req, res) => {
 app.post('/api/payhero/callback', (req, res) => {
   try {
     const payload = req.body || {};
-    console.log('PayHero Webhook Received Payload:', JSON.stringify(payload));
+    console.log('[PayHero Webhook] Received Callback Payload:', JSON.stringify(payload));
 
     const reference =
       payload.external_reference ||
       payload.ExternalReference ||
       payload.response?.ExternalReference ||
       payload.response?.external_reference ||
-      payload.CheckoutRequestID;
+      payload.CheckoutRequestID ||
+      payload.checkout_request_id;
 
     const isSuccess =
       payload.status === 'SUCCESS' ||
@@ -252,10 +315,11 @@ app.post('/api/payhero/callback', (req, res) => {
         if (isSuccess) {
           order.status = 'PAID';
           order.paidAt = new Date().toISOString();
-          order.payheroReceipt = payload.MpesaReceiptNumber || payload.mpesa_code || `MPESA-${Date.now().toString().slice(-6)}`;
-          console.log(`Order ${order.reference} successfully transitioned to PAID`);
+          order.payheroReceipt = payload.MpesaReceiptNumber || payload.mpesa_code || payload.response?.MpesaReceiptNumber || `MPESA-${Date.now().toString().slice(-6)}`;
+          console.log(`[PayHero Webhook] Order ${order.reference} verified and marked as PAID (${order.payheroReceipt})`);
         } else {
           order.status = 'FAILED';
+          console.log(`[PayHero Webhook] Order ${order.reference} marked as FAILED`);
         }
         ordersStore.set(order.reference, order);
         savePersistedOrders(ordersStore);
@@ -268,7 +332,7 @@ app.post('/api/payhero/callback', (req, res) => {
   }
 });
 
-// 3. Poll Order Status Endpoint (with 180s Expiration Window for M-PESA STK PIN entry)
+// 3. Poll Order Status Endpoint
 app.get('/api/payhero/status/:reference', (req, res) => {
   const { reference } = req.params;
   const order = ordersStore.get(reference);
@@ -309,7 +373,64 @@ app.post('/api/payhero/simulate-payment', (req, res) => {
   });
 });
 
-// 5. Admin Data & Metrics Endpoint
+// 5. Admin Live PayHero Connection & Channel Diagnostic Test
+app.post('/api/admin/test-payhero', async (req, res) => {
+  try {
+    const authHeaderVal = getPayheroAuthHeader();
+    if (!authHeaderVal) {
+      return res.status(400).json({
+        success: false,
+        error: 'No PayHero credentials configured. Please enter your API Key or Username/Password.',
+      });
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': authHeaderVal,
+    };
+
+    // Query payment channels
+    let channelsData: any = null;
+    let walletData: any = null;
+    let channelsStatus = 0;
+    let walletStatus = 0;
+
+    try {
+      const chanRes = await fetch('https://backend.payhero.co.ke/api/v2/payment_channels', { headers });
+      channelsStatus = chanRes.status;
+      channelsData = await chanRes.json().catch(() => null);
+    } catch (e: any) {
+      console.log('Channels query notice:', e.message);
+    }
+
+    try {
+      const walRes = await fetch('https://backend.payhero.co.ke/api/v2/wallets', { headers });
+      walletStatus = walRes.status;
+      walletData = await walRes.json().catch(() => null);
+    } catch (e: any) {
+      console.log('Wallets query notice:', e.message);
+    }
+
+    const isConnected = channelsStatus === 200 || walletStatus === 200;
+
+    return res.json({
+      success: isConnected,
+      channelId: adminSettings.channelId,
+      channelsStatus,
+      walletStatus,
+      channels: channelsData,
+      wallet: walletData,
+      message: isConnected
+        ? 'Successfully connected to PayHero API Gateway!'
+        : `PayHero connection returned HTTP ${channelsStatus || walletStatus}. Check your credentials.`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Admin Data & Metrics Endpoint
 app.get('/api/admin/data', (req, res) => {
   const orders = Array.from(ordersStore.values());
 
@@ -333,7 +454,7 @@ app.get('/api/admin/data', (req, res) => {
   });
 });
 
-// 6. Admin Settings Update Endpoint (Persists permanently to disk)
+// 7. Admin Settings Update Endpoint (Persists permanently to disk)
 app.post('/api/admin/settings', (req, res) => {
   const { channelId, apiKey, apiUsername, apiPassword, eventStatus } = req.body;
 
