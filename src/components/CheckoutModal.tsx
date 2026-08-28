@@ -61,26 +61,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       price: t.price,
     }));
 
-  // Auto fill user email/name from local session if available
+  // Reset error state when modal is opened
   useEffect(() => {
     if (isOpen) {
       setErrorMessage('');
-      try {
-        const savedSession = localStorage.getItem('user_session');
-        if (savedSession) {
-          const parsed = JSON.parse(savedSession);
-          if (parsed.email) {
-            setForm((prev) => ({
-              ...prev,
-              email: prev.email || parsed.email,
-              fullName: prev.fullName || parsed.name || '',
-              phone: prev.phone || parsed.phone || '',
-            }));
-          }
-        }
-      } catch (e) {
-        // ignore
-      }
     }
   }, [isOpen]);
 
@@ -300,7 +284,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Bett Kiplagat"
+                      placeholder="Enter your full name"
                       value={form.fullName}
                       onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                       className="w-full bg-[#0A0A0C] border border-purple-900/50 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 font-sans"
@@ -312,7 +296,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <input
                       type="email"
                       required
-                      placeholder="e.g. bettkiplagatmicah@gmail.com"
+                      placeholder="Enter your email address"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
                       className="w-full bg-[#0A0A0C] border border-purple-900/50 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 font-sans"
@@ -325,13 +309,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <input
                     type="tel"
                     required
-                    placeholder="e.g. 0712345678, 0143115691 or 254..."
+                    placeholder="07XXXXXXXX or 01XXXXXXXX"
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     className="w-full bg-[#0A0A0C] border border-purple-900/50 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 font-mono"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Enter valid Kenyan M-Pesa line (07xx, 01xx, or 2547xx) for STK prompt.
+                    Enter valid 10-digit Kenyan M-Pesa line (e.g. 0712345678 or 0112345678) for STK prompt.
                   </p>
                 </div>
               </div>

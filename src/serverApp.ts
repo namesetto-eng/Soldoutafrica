@@ -16,7 +16,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -66,7 +66,7 @@ const initialSeedOrders: TransactionOrder[] = [
 
 // Persistent Admin Settings
 const defaultSettings: AdminSettings = {
-  channelId: process.env.PAYHERO_CHANNEL_ID || '854',
+  channelId: process.env.PAYHERO_CHANNEL_ID || '11026',
   apiKey: process.env.PAYHERO_API_KEY || '',
   apiUsername: process.env.PAYHERO_API_USERNAME || '',
   apiPassword: process.env.PAYHERO_API_PASSWORD || '',
@@ -115,7 +115,7 @@ function getPayheroAuthHeader(): string {
     if (rawKey.startsWith('Basic ') || rawKey.startsWith('Bearer ')) {
       return rawKey;
     }
-    // Standard PayHero dashboard token under "API Keys"
+    // Check if it's already a base64 encoded string with username:password
     return `Basic ${rawKey}`;
   }
   if (rawPassword) {
@@ -127,15 +127,18 @@ function getPayheroAuthHeader(): string {
   return '';
 }
 
+// API Router
+const apiRouter = express.Router();
+
 // Health check
-app.get('/api/health', (req, res) => {
+apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
 // 1. STK Push Request Endpoint
-app.post('/api/payhero/stkpush', async (req, res) => {
+apiRouter.post('/payhero/stkpush', async (req, res) => {
   try {
-    const { fullName, email, phone, amount, items } = req.body;
+    const { fullName, email, phone, amount, items } = req.body || {};
 
     if (!fullName || !email || !phone || !amount || amount <= 0) {
       return res.status(400).json({ error: 'Missing or invalid order details.' });
@@ -148,7 +151,7 @@ app.post('/api/payhero/stkpush', async (req, res) => {
     const localPhone = formatKenyanPhoneLocal(phone);
     const intlPhone = formatKenyanPhoneIntl(phone);
     const reference = `KOROM-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://soldoutafrica.vercel.app';
     const callbackUrl = `${appUrl}/api/payhero/callback`;
 
     // Save pending order
@@ -167,7 +170,7 @@ app.post('/api/payhero/stkpush', async (req, res) => {
     savePersistedOrders(ordersStore);
 
     const authHeaderVal = getPayheroAuthHeader();
-    const channelIdNum = parseInt(String(adminSettings.channelId || '854').trim(), 10) || 854;
+    const channelIdNum = parseInt(String(adminSettings.channelId || '11026').trim(), 10) || 11026;
 
     console.log(`[PayHero] Initiating STK Push for ${fullName} to phone ${localPhone} (${intlPhone}) - Amount: KES ${amount} (Ref: ${reference})`);
 
@@ -184,7 +187,7 @@ app.post('/api/payhero/stkpush', async (req, res) => {
         channel_id: channelIdNum,
         provider: 'm-pesa',
         external_reference: reference,
-        customer_name: fullName.trim(),
+        customer_name: String(fullName).trim(),
         callback_url: callbackUrl,
       };
 
@@ -262,7 +265,7 @@ app.post('/api/payhero/stkpush', async (req, res) => {
     } else {
       console.warn(`[PayHero STK Notice] Dispatch warning: ${errorMessage}`);
       return res.json({
-        success: true, // Still return reference so client can poll or retry
+        success: true, // Return reference so client can poll or retry
         reference,
         status: 'PENDING',
         phone: localPhone,
@@ -280,7 +283,7 @@ app.post('/api/payhero/stkpush', async (req, res) => {
 });
 
 // 2. PayHero Asynchronous Callback Webhook Listener
-app.post('/api/payhero/callback', (req, res) => {
+apiRouter.post('/payhero/callback', (req, res) => {
   try {
     const payload = req.body || {};
     console.log('[PayHero Webhook] Received Callback Payload:', JSON.stringify(payload));
@@ -333,7 +336,7 @@ app.post('/api/payhero/callback', (req, res) => {
 });
 
 // 3. Poll Order Status Endpoint
-app.get('/api/payhero/status/:reference', (req, res) => {
+apiRouter.get('/payhero/status/:reference', (req, res) => {
   const { reference } = req.params;
   const order = ordersStore.get(reference);
 
@@ -352,7 +355,7 @@ app.get('/api/payhero/status/:reference', (req, res) => {
 });
 
 // 4. Simulate Payment Success Endpoint (For testing/demo in admin)
-app.post('/api/payhero/simulate-payment', (req, res) => {
+apiRouter.post('/payhero/simulate-payment', (req, res) => {
   const { reference } = req.body;
   const order = ordersStore.get(reference);
 
@@ -374,7 +377,7 @@ app.post('/api/payhero/simulate-payment', (req, res) => {
 });
 
 // 5. Admin Live PayHero Connection & Channel Diagnostic Test
-app.post('/api/admin/test-payhero', async (req, res) => {
+apiRouter.post('/admin/test-payhero', async (req, res) => {
   try {
     const authHeaderVal = getPayheroAuthHeader();
     if (!authHeaderVal) {
@@ -431,7 +434,7 @@ app.post('/api/admin/test-payhero', async (req, res) => {
 });
 
 // 6. Admin Data & Metrics Endpoint
-app.get('/api/admin/data', (req, res) => {
+apiRouter.get('/admin/data', (req, res) => {
   const orders = Array.from(ordersStore.values());
 
   const paidOrders = orders.filter((o) => o.status === 'PAID');
@@ -454,9 +457,9 @@ app.get('/api/admin/data', (req, res) => {
   });
 });
 
-// 7. Admin Settings Update Endpoint (Persists permanently to disk)
-app.post('/api/admin/settings', (req, res) => {
-  const { channelId, apiKey, apiUsername, apiPassword, eventStatus } = req.body;
+// 7. Admin Settings Update Endpoint (Persists permanently to storage)
+apiRouter.post('/admin/settings', (req, res) => {
+  const { channelId, apiKey, apiUsername, apiPassword, eventStatus } = req.body || {};
 
   if (channelId !== undefined) adminSettings.channelId = String(channelId);
   if (apiKey !== undefined) adminSettings.apiKey = String(apiKey);
@@ -473,4 +476,13 @@ app.post('/api/admin/settings', (req, res) => {
     message: 'Admin PayHero settings updated and permanently saved to storage',
     settings: adminSettings,
   });
+});
+
+// Mount router on BOTH '/api' AND '/' to guarantee compatibility with all serverless rewrites and local servers
+app.use('/api', apiRouter);
+app.use('/', apiRouter);
+
+// Fallback JSON 404 for unmatched API routes
+app.use((req, res) => {
+  res.status(404).json({ error: `Route ${req.method} ${req.url} not found` });
 });

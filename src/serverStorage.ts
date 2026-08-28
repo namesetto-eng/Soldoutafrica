@@ -24,15 +24,24 @@ export interface AdminSettings {
 }
 
 function getStorageDir(): string {
+  // If running in Vercel or Lambda serverless environment, use /tmp directly
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT) {
+    const tmpDir = path.join('/tmp', 'korom_ticketing_data');
+    try {
+      if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true });
+      }
+      return tmpDir;
+    } catch {
+      return '/tmp';
+    }
+  }
+
   try {
     const defaultDir = path.join(process.cwd(), 'data');
     if (!fs.existsSync(defaultDir)) {
       fs.mkdirSync(defaultDir, { recursive: true });
     }
-    // Test write permission
-    const testFile = path.join(defaultDir, '.test_write');
-    fs.writeFileSync(testFile, '1');
-    fs.unlinkSync(testFile);
     return defaultDir;
   } catch {
     const tmpDir = path.join('/tmp', 'korom_ticketing_data');
@@ -57,7 +66,7 @@ export function loadPersistedSettings(defaultSettings: AdminSettings): AdminSett
       const raw = fs.readFileSync(SETTINGS_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       return {
-        channelId: parsed.channelId || defaultSettings.channelId || '854',
+        channelId: parsed.channelId || defaultSettings.channelId || '11026',
         apiKey: parsed.apiKey || defaultSettings.apiKey || '',
         apiUsername: parsed.apiUsername || defaultSettings.apiUsername || '',
         apiPassword: parsed.apiPassword || defaultSettings.apiPassword || '',

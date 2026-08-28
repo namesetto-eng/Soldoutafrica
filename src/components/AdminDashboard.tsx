@@ -70,9 +70,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       const res = await fetch('/api/admin/data');
       if (res.ok) {
-        const data = await res.json();
+        const text = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = {};
+        }
         if (data.settings) {
-          setChannelId(data.settings.channelId || '854');
+          setChannelId(data.settings.channelId || '11026');
           setApiKey(data.settings.apiKey || '');
           setApiUsername(data.settings.apiUsername || '');
           setApiPassword(data.settings.apiPassword || '');
@@ -143,7 +149,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {
+          success: false,
+          error: text.length > 200 ? `Server returned HTTP ${res.status}: ${res.statusText}` : text || `Server HTTP ${res.status}`,
+        };
+      }
       setTestResult(data);
     } catch (err: any) {
       setTestResult({ success: false, error: err?.message || 'Network error connecting to backend' });
@@ -171,7 +186,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           items: [{ tierName: 'LIVE STK TEST', quantity: 1, price: 1 }],
         }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {
+          success: false,
+          error: text.length > 200 ? `Server returned HTTP ${res.status}: ${res.statusText}` : text || `Server HTTP ${res.status}`,
+        };
+      }
       setTestStkResult(data);
       fetchAdminData();
     } catch (err: any) {
